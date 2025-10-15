@@ -1,4 +1,4 @@
-package com.example.mailserver;
+package com.example.mailserver;// MailServer.java
 import java.net.*;
 import java.io.*;
 import java.util.*;
@@ -17,7 +17,7 @@ public class MailServer {
     }
 
     public void start() {
-        byte[] receiveData = new byte[1024];
+        byte[] receiveData = new byte[2048];
 
         while (true) {
             try {
@@ -29,14 +29,14 @@ public class MailServer {
                 int clientPort = receivePacket.getPort();
 
                 System.out.println("Nhận từ client: " + message);
-                String response = handleRequest(message);
+                String response = handleRequest(message, clientAddress.getHostAddress());
 
                 byte[] sendData = response.getBytes();
                 DatagramPacket sendPacket = new DatagramPacket(
                         sendData, sendData.length, clientAddress, clientPort);
                 socket.send(sendPacket);
 
-                receiveData = new byte[1024];
+                receiveData = new byte[2048];
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -44,7 +44,7 @@ public class MailServer {
         }
     }
 
-    private String handleRequest(String request) {
+    private String handleRequest(String request, String clientIP) {
         String[] parts = request.split("\\|");
         String command = parts[0];
 
@@ -53,7 +53,7 @@ public class MailServer {
                 case "REGISTER":
                     return handleRegister(parts[1]);
                 case "SEND_EMAIL":
-                    return handleSendEmail(parts[1], parts[2], parts[3]);
+                    return handleSendEmail(parts[1], parts[2], parts[3], parts[4], clientIP);
                 case "LOGIN":
                     return handleLogin(parts[1]);
                 case "GET_EMAIL":
@@ -89,7 +89,7 @@ public class MailServer {
         }
     }
 
-    private String handleSendEmail(String sender, String recipient, String emailContent) {
+    private String handleSendEmail(String sender, String recipient, String subject, String emailContent, String clientIP) {
         try {
             File accountDir = new File(ACCOUNTS_DIR + recipient);
 
@@ -102,8 +102,11 @@ public class MailServer {
 
             FileWriter writer = new FileWriter(emailFile);
             writer.write("From: " + sender + "\n");
+            writer.write("To: " + recipient + "\n");
+            writer.write("Subject: " + subject + "\n");
             writer.write("Date: " + new Date() + "\n");
-            writer.write("-------------------\n");
+            writer.write("IP: " + clientIP + "\n");
+            writer.write("-----------------------------------\n");
             writer.write(emailContent);
             writer.close();
 
@@ -112,7 +115,7 @@ public class MailServer {
             }
             userEmails.get(recipient).add(emailFileName);
 
-            System.out.println("Đã gửi email từ " + sender + " đến: " + recipient);
+            System.out.println("Email từ " + sender + " [" + clientIP + "] đến " + recipient + " - Subject: " + subject);
             return "SUCCESS|Email sent successfully";
 
         } catch (IOException e) {
@@ -135,7 +138,24 @@ public class MailServer {
 
             StringBuilder fileList = new StringBuilder("SUCCESS|");
             for (File file : files) {
-                fileList.append(file.getName()).append(";");
+                // Đọc subject từ file để hiển thị trong danh sách
+                try {
+                    BufferedReader reader = new BufferedReader(new FileReader(file));
+                    String line;
+                    String subject = "No Subject";
+
+                    while ((line = reader.readLine()) != null) {
+                        if (line.startsWith("Subject: ")) {
+                            subject = line.substring(9);
+                            break;
+                        }
+                    }
+                    reader.close();
+
+                    fileList.append(file.getName()).append(":::").append(subject).append(";");
+                } catch (IOException e) {
+                    fileList.append(file.getName()).append(":::No Subject;");
+                }
             }
 
             System.out.println("User " + username + " đã login");

@@ -19,6 +19,7 @@ public class MailClientGUI extends Application {
     private DatagramSocket socket;
     private InetAddress serverIP;
     private String currentUser = null;
+    private String clientIP = "";
 
     private Stage primaryStage;
     private Scene loginScene;
@@ -27,11 +28,18 @@ public class MailClientGUI extends Application {
     @Override
     public void start(Stage stage) {
         primaryStage = stage;
-        primaryStage.setTitle("Mail Client");
+        primaryStage.setTitle("VKU Mail Client");
 
         try {
             socket = new DatagramSocket();
             serverIP = InetAddress.getByName(SERVER_ADDRESS);
+
+            // Lấy IP của client
+            try (DatagramSocket tempSocket = new DatagramSocket()) {
+                tempSocket.connect(InetAddress.getByName("8.8.8.8"), 10002);
+                clientIP = tempSocket.getLocalAddress().getHostAddress();
+            }
+
         } catch (Exception e) {
             showAlert("Error", "Không thể kết nối đến server!", Alert.AlertType.ERROR);
             return;
@@ -40,7 +48,7 @@ public class MailClientGUI extends Application {
         createLoginScene();
         primaryStage.setScene(loginScene);
         primaryStage.setWidth(500);
-        primaryStage.setHeight(400);
+        primaryStage.setHeight(450);
         primaryStage.show();
     }
 
@@ -51,13 +59,17 @@ public class MailClientGUI extends Application {
         root.setStyle("-fx-background-color: linear-gradient(to bottom, #667eea 0%, #764ba2 100%);");
 
         // Logo/Title
-        Label titleLabel = new Label("MAIL Server");
+        Label titleLabel = new Label("VKU MAIL");
         titleLabel.setFont(Font.font("Arial", FontWeight.BOLD, 36));
         titleLabel.setTextFill(Color.WHITE);
 
         Label subtitleLabel = new Label("UDP Socket Mail Service");
         subtitleLabel.setFont(Font.font("Arial", 14));
         subtitleLabel.setTextFill(Color.WHITE);
+
+        Label ipLabel = new Label("Your IP: " + clientIP);
+        ipLabel.setFont(Font.font("Arial", FontWeight.BOLD, 12));
+        ipLabel.setTextFill(Color.LIGHTGREEN);
 
         // Login form container
         VBox formBox = new VBox(15);
@@ -90,7 +102,7 @@ public class MailClientGUI extends Application {
 
         formBox.getChildren().addAll(usernameLabel, usernameField, buttonBox);
 
-        root.getChildren().addAll(titleLabel, subtitleLabel, formBox);
+        root.getChildren().addAll(titleLabel, subtitleLabel, ipLabel, formBox);
 
         // Event handlers
         loginButton.setOnAction(e -> handleLogin(usernameField.getText()));
@@ -115,6 +127,10 @@ public class MailClientGUI extends Application {
         userLabel.setFont(Font.font("Arial", FontWeight.BOLD, 16));
         userLabel.setTextFill(Color.WHITE);
 
+        Label ipLabel = new Label("🌐 IP: " + clientIP);
+        ipLabel.setFont(Font.font("Arial", FontWeight.NORMAL, 12));
+        ipLabel.setTextFill(Color.LIGHTGREEN);
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -123,22 +139,23 @@ public class MailClientGUI extends Application {
                 "-fx-font-weight: bold;");
         logoutButton.setOnAction(e -> handleLogout());
 
-        topBar.getChildren().addAll(userLabel, spacer, logoutButton);
+        topBar.getChildren().addAll(userLabel, ipLabel, spacer, logoutButton);
 
         // Left panel - Email list
         VBox leftPanel = new VBox(10);
         leftPanel.setPadding(new Insets(15));
-        leftPanel.setPrefWidth(300);
+        leftPanel.setPrefWidth(350);
         leftPanel.setStyle("-fx-background-color: white;");
 
         Label inboxLabel = new Label("📥 Hộp thư đến");
         inboxLabel.setFont(Font.font("Arial", FontWeight.BOLD, 16));
 
-        ListView<String> emailListView = new ListView<>();
+        ListView<EmailItem> emailListView = new ListView<>();
         emailListView.setPrefHeight(400);
+        emailListView.setCellFactory(lv -> new EmailCell());
 
         Button refreshButton = new Button("🔄 Làm mới");
-        refreshButton.setPrefWidth(270);
+        refreshButton.setPrefWidth(320);
         refreshButton.setStyle("-fx-background-color: #667eea; -fx-text-fill: white; -fx-font-weight: bold;");
         refreshButton.setOnAction(e -> loadEmails(emailListView));
 
@@ -163,20 +180,27 @@ public class MailClientGUI extends Application {
         TextField toField = new TextField();
         toField.setPromptText("Nhập username người nhận");
 
+        Label subjectLabel = new Label("Tiêu đề:");
+        subjectLabel.setFont(Font.font("Arial", FontWeight.BOLD, 14));
+        TextField subjectField = new TextField();
+        subjectField.setPromptText("Nhập tiêu đề email");
+
         Label contentLabel = new Label("Nội dung:");
         contentLabel.setFont(Font.font("Arial", FontWeight.BOLD, 14));
         TextArea contentArea = new TextArea();
-        contentArea.setPrefRowCount(15);
+        contentArea.setPrefRowCount(12);
         contentArea.setPromptText("Nhập nội dung email...");
 
         Button sendButton = new Button("📤 Gửi email");
         sendButton.setPrefWidth(150);
         sendButton.setStyle("-fx-background-color: #667eea; -fx-text-fill: white; " +
                 "-fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 10;");
-        sendButton.setOnAction(e -> handleSendEmail(toField.getText(), contentArea.getText(),
-                toField, contentArea, emailListView));
+        sendButton.setOnAction(e -> handleSendEmail(toField.getText(), subjectField.getText(),
+                contentArea.getText(), toField, subjectField,
+                contentArea, emailListView));
 
-        composeBox.getChildren().addAll(toLabel, toField, contentLabel, contentArea, sendButton);
+        composeBox.getChildren().addAll(toLabel, toField, subjectLabel, subjectField,
+                contentLabel, contentArea, sendButton);
         composeTab.setContent(composeBox);
 
         // Tab 2: Read email
@@ -186,13 +210,14 @@ public class MailClientGUI extends Application {
         VBox readBox = new VBox(10);
         readBox.setPadding(new Insets(15));
 
-        Label readTitleLabel = new Label("Nội dung email:");
+        Label readTitleLabel = new Label("Chi tiết email:");
         readTitleLabel.setFont(Font.font("Arial", FontWeight.BOLD, 14));
 
         TextArea readArea = new TextArea();
         readArea.setPrefRowCount(20);
         readArea.setEditable(false);
         readArea.setWrapText(true);
+        readArea.setStyle("-fx-font-family: 'Courier New'; -fx-font-size: 13px;");
 
         readBox.getChildren().addAll(readTitleLabel, readArea);
         readTab.setContent(readBox);
@@ -202,9 +227,9 @@ public class MailClientGUI extends Application {
 
         // Email list selection handler
         emailListView.setOnMouseClicked(e -> {
-            String selectedEmail = emailListView.getSelectionModel().getSelectedItem();
+            EmailItem selectedEmail = emailListView.getSelectionModel().getSelectedItem();
             if (selectedEmail != null) {
-                loadEmailContent(selectedEmail, readArea);
+                loadEmailContent(selectedEmail.getFilename(), readArea);
                 tabPane.getSelectionModel().select(readTab);
             }
         });
@@ -214,10 +239,50 @@ public class MailClientGUI extends Application {
         root.setLeft(leftPanel);
         root.setCenter(rightPanel);
 
-        mainScene = new Scene(root, 900, 600);
+        mainScene = new Scene(root, 1000, 650);
 
         // Load emails initially
         loadEmails(emailListView);
+    }
+
+    // Email Item class
+    private static class EmailItem {
+        private String filename;
+        private String subject;
+
+        public EmailItem(String filename, String subject) {
+            this.filename = filename;
+            this.subject = subject;
+        }
+
+        public String getFilename() { return filename; }
+        public String getSubject() { return subject; }
+    }
+
+    // Custom Cell for ListView
+    private static class EmailCell extends ListCell<EmailItem> {
+        @Override
+        protected void updateItem(EmailItem item, boolean empty) {
+            super.updateItem(item, empty);
+
+            if (empty || item == null) {
+                setText(null);
+                setGraphic(null);
+            } else {
+                VBox vbox = new VBox(5);
+                vbox.setPadding(new Insets(5));
+
+                Label subjectLabel = new Label("📧 " + item.getSubject());
+                subjectLabel.setFont(Font.font("Arial", FontWeight.BOLD, 13));
+
+                Label filenameLabel = new Label(item.getFilename());
+                filenameLabel.setFont(Font.font("Arial", 10));
+                filenameLabel.setTextFill(Color.GRAY);
+
+                vbox.getChildren().addAll(subjectLabel, filenameLabel);
+                setGraphic(vbox);
+            }
+        }
     }
 
     private String sendRequest(String request) {
@@ -268,8 +333,8 @@ public class MailClientGUI extends Application {
             currentUser = username;
             createMainScene();
             primaryStage.setScene(mainScene);
-            primaryStage.setWidth(900);
-            primaryStage.setHeight(600);
+            primaryStage.setWidth(1000);
+            primaryStage.setHeight(650);
         } else {
             showAlert("Lỗi", parts[1], Alert.AlertType.ERROR);
         }
@@ -279,23 +344,25 @@ public class MailClientGUI extends Application {
         currentUser = null;
         primaryStage.setScene(loginScene);
         primaryStage.setWidth(500);
-        primaryStage.setHeight(400);
+        primaryStage.setHeight(450);
     }
 
-    private void handleSendEmail(String recipient, String content, TextField toField,
-                                 TextArea contentArea, ListView<String> emailListView) {
-        if (recipient.trim().isEmpty() || content.trim().isEmpty()) {
+    private void handleSendEmail(String recipient, String subject, String content,
+                                 TextField toField, TextField subjectField, TextArea contentArea,
+                                 ListView<EmailItem> emailListView) {
+        if (recipient.trim().isEmpty() || subject.trim().isEmpty() || content.trim().isEmpty()) {
             showAlert("Lỗi", "Vui lòng nhập đầy đủ thông tin!", Alert.AlertType.ERROR);
             return;
         }
 
-        String request = "SEND_EMAIL|" + currentUser + "|" + recipient + "|" + content;
+        String request = "SEND_EMAIL|" + currentUser + "|" + recipient + "|" + subject + "|" + content;
         String response = sendRequest(request);
         String[] parts = response.split("\\|");
 
         if (parts[0].equals("SUCCESS")) {
             showAlert("Thành công", "Gửi email thành công!", Alert.AlertType.INFORMATION);
             toField.clear();
+            subjectField.clear();
             contentArea.clear();
             loadEmails(emailListView);
         } else {
@@ -303,7 +370,7 @@ public class MailClientGUI extends Application {
         }
     }
 
-    private void loadEmails(ListView<String> emailListView) {
+    private void loadEmails(ListView<EmailItem> emailListView) {
         String request = "LOGIN|" + currentUser;
         String response = sendRequest(request);
         String[] parts = response.split("\\|");
@@ -311,10 +378,13 @@ public class MailClientGUI extends Application {
         emailListView.getItems().clear();
 
         if (parts[0].equals("SUCCESS") && parts.length > 1 && !parts[1].equals("No emails")) {
-            String[] files = parts[1].split(";");
-            for (String file : files) {
-                if (!file.trim().isEmpty()) {
-                    emailListView.getItems().add(file);
+            String[] emails = parts[1].split(";");
+            for (String email : emails) {
+                if (!email.trim().isEmpty()) {
+                    String[] emailParts = email.split(":::");
+                    if (emailParts.length == 2) {
+                        emailListView.getItems().add(new EmailItem(emailParts[0], emailParts[1]));
+                    }
                 }
             }
         }
