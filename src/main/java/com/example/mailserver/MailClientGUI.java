@@ -1,4 +1,5 @@
-package com.example.mailserver;// MailClientGUI.java
+package com.example.mailserver;
+
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -14,12 +15,12 @@ import java.net.*;
 import java.io.IOException;
 
 public class MailClientGUI extends Application {
-    private static final String SERVER_ADDRESS = "localhost";
     private static final int SERVER_PORT = 9876;
     private DatagramSocket socket;
     private InetAddress serverIP;
     private String currentUser = null;
     private String clientIP = "";
+    private String serverAddress = "localhost"; // Có thể thay đổi
 
     private Stage primaryStage;
     private Scene loginScene;
@@ -32,23 +33,22 @@ public class MailClientGUI extends Application {
 
         try {
             socket = new DatagramSocket();
-            serverIP = InetAddress.getByName(SERVER_ADDRESS);
 
-            // Lấy IP của client
+            // Get client IP
             try (DatagramSocket tempSocket = new DatagramSocket()) {
                 tempSocket.connect(InetAddress.getByName("8.8.8.8"), 10002);
                 clientIP = tempSocket.getLocalAddress().getHostAddress();
             }
 
         } catch (Exception e) {
-            showAlert("Error", "Không thể kết nối đến server!", Alert.AlertType.ERROR);
+            showAlert("Error", "Không thể khởi tạo socket!", Alert.AlertType.ERROR);
             return;
         }
 
         createLoginScene();
         primaryStage.setScene(loginScene);
-        primaryStage.setWidth(500);
-        primaryStage.setHeight(450);
+        primaryStage.setWidth(550);
+        primaryStage.setHeight(550);
         primaryStage.show();
     }
 
@@ -58,7 +58,6 @@ public class MailClientGUI extends Application {
         root.setAlignment(Pos.CENTER);
         root.setStyle("-fx-background-color: linear-gradient(to bottom, #667eea 0%, #764ba2 100%);");
 
-        // Logo/Title
         Label titleLabel = new Label("VKU MAIL");
         titleLabel.setFont(Font.font("Arial", FontWeight.BOLD, 36));
         titleLabel.setTextFill(Color.WHITE);
@@ -71,19 +70,35 @@ public class MailClientGUI extends Application {
         ipLabel.setFont(Font.font("Arial", FontWeight.BOLD, 12));
         ipLabel.setTextFill(Color.LIGHTGREEN);
 
-        // Login form container
         VBox formBox = new VBox(15);
         formBox.setPadding(new Insets(30));
         formBox.setAlignment(Pos.CENTER);
-        formBox.setMaxWidth(350);
+        formBox.setMaxWidth(400);
         formBox.setStyle("-fx-background-color: white; -fx-background-radius: 10;");
 
+        // Server Address
+        Label serverLabel = new Label("Server Address:");
+        serverLabel.setFont(Font.font("Arial", FontWeight.BOLD, 14));
+
+        TextField serverField = new TextField("localhost");
+        serverField.setPromptText("Nhập IP server (VD: 192.168.1.100)");
+        serverField.setStyle("-fx-font-size: 13px; -fx-padding: 8;");
+
+        // Username
         Label usernameLabel = new Label("Username:");
         usernameLabel.setFont(Font.font("Arial", FontWeight.BOLD, 14));
 
         TextField usernameField = new TextField();
         usernameField.setPromptText("Nhập username");
-        usernameField.setStyle("-fx-font-size: 14px; -fx-padding: 10;");
+        usernameField.setStyle("-fx-font-size: 13px; -fx-padding: 8;");
+
+        // Password
+        Label passwordLabel = new Label("Password:");
+        passwordLabel.setFont(Font.font("Arial", FontWeight.BOLD, 14));
+
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Nhập password");
+        passwordField.setStyle("-fx-font-size: 13px; -fx-padding: 8;");
 
         HBox buttonBox = new HBox(10);
         buttonBox.setAlignment(Pos.CENTER);
@@ -99,16 +114,24 @@ public class MailClientGUI extends Application {
                 "-fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 10;");
 
         buttonBox.getChildren().addAll(loginButton, registerButton);
-
-        formBox.getChildren().addAll(usernameLabel, usernameField, buttonBox);
-
+        formBox.getChildren().addAll(serverLabel, serverField, usernameLabel, usernameField,
+                passwordLabel, passwordField, buttonBox);
         root.getChildren().addAll(titleLabel, subtitleLabel, ipLabel, formBox);
 
-        // Event handlers
-        loginButton.setOnAction(e -> handleLogin(usernameField.getText()));
-        registerButton.setOnAction(e -> handleRegister(usernameField.getText()));
+        loginButton.setOnAction(e -> {
+            serverAddress = serverField.getText().trim();
+            handleLogin(usernameField.getText(), passwordField.getText());
+        });
 
-        usernameField.setOnAction(e -> handleLogin(usernameField.getText()));
+        registerButton.setOnAction(e -> {
+            serverAddress = serverField.getText().trim();
+            handleRegister(usernameField.getText(), passwordField.getText());
+        });
+
+        passwordField.setOnAction(e -> {
+            serverAddress = serverField.getText().trim();
+            handleLogin(usernameField.getText(), passwordField.getText());
+        });
 
         loginScene = new Scene(root);
     }
@@ -117,7 +140,6 @@ public class MailClientGUI extends Application {
         BorderPane root = new BorderPane();
         root.setStyle("-fx-background-color: #f5f5f5;");
 
-        // Top bar
         HBox topBar = new HBox(10);
         topBar.setPadding(new Insets(15));
         topBar.setAlignment(Pos.CENTER_LEFT);
@@ -127,21 +149,23 @@ public class MailClientGUI extends Application {
         userLabel.setFont(Font.font("Arial", FontWeight.BOLD, 16));
         userLabel.setTextFill(Color.WHITE);
 
-        Label ipLabel = new Label("🌐 IP: " + clientIP);
-        ipLabel.setFont(Font.font("Arial", FontWeight.NORMAL, 12));
-        ipLabel.setTextFill(Color.LIGHTGREEN);
+        Label ipLabelMain = new Label("🌐 " + clientIP);
+        ipLabelMain.setFont(Font.font("Arial", FontWeight.NORMAL, 12));
+        ipLabelMain.setTextFill(Color.LIGHTGREEN);
+
+        Label serverLabel = new Label("📡 Server: " + serverAddress);
+        serverLabel.setFont(Font.font("Arial", FontWeight.NORMAL, 12));
+        serverLabel.setTextFill(Color.LIGHTYELLOW);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button logoutButton = new Button("Đăng xuất");
-        logoutButton.setStyle("-fx-background-color: #764ba2; -fx-text-fill: white; " +
-                "-fx-font-weight: bold;");
+        logoutButton.setStyle("-fx-background-color: #764ba2; -fx-text-fill: white; -fx-font-weight: bold;");
         logoutButton.setOnAction(e -> handleLogout());
 
-        topBar.getChildren().addAll(userLabel, ipLabel, spacer, logoutButton);
+        topBar.getChildren().addAll(userLabel, ipLabelMain, serverLabel, spacer, logoutButton);
 
-        // Left panel - Email list
         VBox leftPanel = new VBox(10);
         leftPanel.setPadding(new Insets(15));
         leftPanel.setPrefWidth(350);
@@ -161,14 +185,12 @@ public class MailClientGUI extends Application {
 
         leftPanel.getChildren().addAll(inboxLabel, emailListView, refreshButton);
 
-        // Right panel - Email content/compose
         VBox rightPanel = new VBox(15);
         rightPanel.setPadding(new Insets(15));
         rightPanel.setStyle("-fx-background-color: white;");
 
         TabPane tabPane = new TabPane();
 
-        // Tab 1: Compose email
         Tab composeTab = new Tab("✉️ Soạn thư");
         composeTab.setClosable(false);
 
@@ -196,14 +218,13 @@ public class MailClientGUI extends Application {
         sendButton.setStyle("-fx-background-color: #667eea; -fx-text-fill: white; " +
                 "-fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 10;");
         sendButton.setOnAction(e -> handleSendEmail(toField.getText(), subjectField.getText(),
-                contentArea.getText(), toField, subjectField,
+                contentArea.getText(),toField, subjectField,
                 contentArea, emailListView));
 
         composeBox.getChildren().addAll(toLabel, toField, subjectLabel, subjectField,
                 contentLabel, contentArea, sendButton);
         composeTab.setContent(composeBox);
 
-        // Tab 2: Read email
         Tab readTab = new Tab("📖 Đọc thư");
         readTab.setClosable(false);
 
@@ -225,7 +246,6 @@ public class MailClientGUI extends Application {
         tabPane.getTabs().addAll(composeTab, readTab);
         rightPanel.getChildren().add(tabPane);
 
-        // Email list selection handler
         emailListView.setOnMouseClicked(e -> {
             EmailItem selectedEmail = emailListView.getSelectionModel().getSelectedItem();
             if (selectedEmail != null) {
@@ -234,18 +254,14 @@ public class MailClientGUI extends Application {
             }
         });
 
-        // Layout
         root.setTop(topBar);
         root.setLeft(leftPanel);
         root.setCenter(rightPanel);
 
         mainScene = new Scene(root, 1000, 650);
-
-        // Load emails initially
         loadEmails(emailListView);
     }
 
-    // Email Item class
     private static class EmailItem {
         private String filename;
         private String subject;
@@ -259,7 +275,6 @@ public class MailClientGUI extends Application {
         public String getSubject() { return subject; }
     }
 
-    // Custom Cell for ListView
     private static class EmailCell extends ListCell<EmailItem> {
         @Override
         protected void updateItem(EmailItem item, boolean empty) {
@@ -287,6 +302,11 @@ public class MailClientGUI extends Application {
 
     private String sendRequest(String request) {
         try {
+            // Connect to server
+            if (serverIP == null) {
+                serverIP = InetAddress.getByName(serverAddress);
+            }
+
             byte[] sendData = request.getBytes();
             DatagramPacket sendPacket = new DatagramPacket(
                     sendData, sendData.length, serverIP, SERVER_PORT);
@@ -294,38 +314,56 @@ public class MailClientGUI extends Application {
 
             byte[] receiveData = new byte[4096];
             DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            socket.setSoTimeout(5000); // 5 seconds timeout
             socket.receive(receivePacket);
 
             return new String(receivePacket.getData(), 0, receivePacket.getLength());
+        } catch (UnknownHostException e) {
+            return "ERROR|Cannot connect to server: Invalid address";
+        } catch (SocketTimeoutException e) {
+            return "ERROR|Connection timeout: Server not responding";
         } catch (IOException e) {
-            return "ERROR|Connection failed";
+            return "ERROR|Connection failed: " + e.getMessage();
         }
     }
 
-    private void handleRegister(String username) {
-        if (username.trim().isEmpty()) {
-            showAlert("Lỗi", "Vui lòng nhập username!", Alert.AlertType.ERROR);
+    private void handleRegister(String username, String password) {
+        if (username.trim().isEmpty() || password.trim().isEmpty()) {
+            showAlert("Lỗi", "Vui lòng nhập đầy đủ thông tin!", Alert.AlertType.ERROR);
             return;
         }
 
-        String request = "REGISTER|" + username;
+        if (serverAddress.trim().isEmpty()) {
+            showAlert("Lỗi", "Vui lòng nhập địa chỉ server!", Alert.AlertType.ERROR);
+            return;
+        }
+
+        serverIP = null; // Reset server IP
+        String request = "REGISTER|" + username + "|" + password;
         String response = sendRequest(request);
         String[] parts = response.split("\\|");
 
         if (parts[0].equals("SUCCESS")) {
-            showAlert("Thành công", "Đăng ký tài khoản thành công!", Alert.AlertType.INFORMATION);
+            showAlert("Thành công", "Đăng ký tài khoản thành công!\nBạn có thể đăng nhập ngay.",
+                    Alert.AlertType.INFORMATION);
         } else {
-            showAlert("Lỗi", parts[1], Alert.AlertType.ERROR);
+            showAlert("Lỗi", parts.length > 1 ? parts[1] : "Đăng ký thất bại", Alert.AlertType.ERROR);
         }
     }
 
-    private void handleLogin(String username) {
-        if (username.trim().isEmpty()) {
-            showAlert("Lỗi", "Vui lòng nhập username!", Alert.AlertType.ERROR);
+    private void handleLogin(String username, String password) {
+        if (username.trim().isEmpty() || password.trim().isEmpty()) {
+            showAlert("Lỗi", "Vui lòng nhập đầy đủ thông tin!", Alert.AlertType.ERROR);
             return;
         }
 
-        String request = "LOGIN|" + username;
+        if (serverAddress.trim().isEmpty()) {
+            showAlert("Lỗi", "Vui lòng nhập địa chỉ server!", Alert.AlertType.ERROR);
+            return;
+        }
+
+        serverIP = null; // Reset server IP
+        String request = "LOGIN|" + username + "|" + password;
         String response = sendRequest(request);
         String[] parts = response.split("\\|");
 
@@ -336,15 +374,16 @@ public class MailClientGUI extends Application {
             primaryStage.setWidth(1000);
             primaryStage.setHeight(650);
         } else {
-            showAlert("Lỗi", parts[1], Alert.AlertType.ERROR);
+            showAlert("Lỗi", parts.length > 1 ? parts[1] : "Đăng nhập thất bại", Alert.AlertType.ERROR);
         }
     }
 
     private void handleLogout() {
         currentUser = null;
+        serverIP = null;
         primaryStage.setScene(loginScene);
-        primaryStage.setWidth(500);
-        primaryStage.setHeight(450);
+        primaryStage.setWidth(550);
+        primaryStage.setHeight(550);
     }
 
     private void handleSendEmail(String recipient, String subject, String content,
@@ -366,12 +405,12 @@ public class MailClientGUI extends Application {
             contentArea.clear();
             loadEmails(emailListView);
         } else {
-            showAlert("Lỗi", parts[1], Alert.AlertType.ERROR);
+            showAlert("Lỗi", parts.length > 1 ? parts[1] : "Gửi email thất bại", Alert.AlertType.ERROR);
         }
     }
 
     private void loadEmails(ListView<EmailItem> emailListView) {
-        String request = "LOGIN|" + currentUser;
+        String request = "GET_EMAILS|" + currentUser;
         String response = sendRequest(request);
         String[] parts = response.split("\\|");
 

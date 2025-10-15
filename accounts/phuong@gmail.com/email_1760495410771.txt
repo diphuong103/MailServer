@@ -1,0 +1,7 @@
+From: tai@gmail.com
+To: phuong@gmail.com
+Subject: Test mail server
+Date: Wed Oct 15 09:30:10 GMT+07:00 2025
+IP: 127.0.0.1
+-----------------------------------
+abcaksdjlkashfkjasdklfdlsjfkl
